@@ -1,175 +1,241 @@
 import streamlit as st
-import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
+import statistics
 
-st.set_page_config(page_title="ADHD Fitness System", layout="centered")
+st.set_page_config(page_title="Aesthetic Transformation Game", layout="centered")
 
-# -----------------------
-# Database Setup
-# -----------------------
+st.title("🔥 10 Week Aesthetic Transformation Game")
 
-conn = sqlite3.connect("fitness.db", check_same_thread=False)
-c = conn.cursor()
+# --------------------------
+# SESSION STATE INIT
+# --------------------------
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    name TEXT PRIMARY KEY,
-    xp INTEGER,
-    streak INTEGER,
-    total_workouts INTEGER,
-    last_workout TEXT
-)
-""")
+defaults = {
+    "xp": 0,
+    "streak": 0,
+    "start_date": date.today(),
+    "weights": [],
+    "waist": [],
+    "chest": [],
+    "arms": [],
+    "calories": 0
+}
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS workouts (
-    name TEXT,
-    workout_date TEXT
-)
-""")
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-conn.commit()
+# --------------------------
+# USER STATS
+# --------------------------
 
-# -----------------------
-# User Selection
-# -----------------------
+st.header("Your Stats")
 
-st.title("🔥 ADHD Fitness System")
+age = st.number_input("Age", 16, 70, 30)
+height = st.number_input("Height (inches)", 55, 85, 70)
+weight = st.number_input("Current Weight (lbs)", 120, 300, 180)
+experience = st.selectbox("Experience", ["Beginner", "Intermediate", "Advanced"])
+effort = st.slider("Effort Level (1–10)", 1, 10, 8)
 
-user_name = st.text_input("Enter Your Name")
+# --------------------------
+# CALORIE CALCULATION
+# --------------------------
 
-if user_name:
+bmr = 10 * (weight * 0.45) + 6.25 * (height * 2.54) - 5 * age + 5
+maintenance = bmr * 1.5
 
-    c.execute("SELECT * FROM users WHERE name=?", (user_name,))
-    user = c.fetchone()
+if st.session_state.calories == 0:
+    st.session_state.calories = int(maintenance + 200)
 
-    if not user:
-        c.execute("INSERT INTO users VALUES (?, 0, 0, 0, NULL)", (user_name,))
-        conn.commit()
-        c.execute("SELECT * FROM users WHERE name=?", (user_name,))
-        user = c.fetchone()
+st.subheader("🔥 Current Calorie Target")
+st.write(f"{st.session_state.calories} kcal/day")
+st.write(f"Protein Target: {int(weight)}g/day")
 
-    xp, streak, total_workouts, last_workout = user[1], user[2], user[3], user[4]
+# --------------------------
+# AUTO ADJUST CALORIES
+# --------------------------
 
-    # -----------------------
-    # Workout Logging
-    # -----------------------
+st.subheader("📈 Weekly Weight Check-In")
 
-    st.subheader("Today's Workout")
+new_weight = st.number_input("Log Weekly Weight", 120, 300, weight)
 
-    workout_type = st.selectbox(
-        "What did you train?",
-        ["Full Body", "Upper Body", "Lower Body", "Cardio", "Mobility"]
-    )
+if st.button("Submit Weekly Weight"):
+    st.session_state.weights.append(new_weight)
 
-    if st.button("✅ Log Workout"):
+    if len(st.session_state.weights) >= 2:
+        change = st.session_state.weights[-1] - st.session_state.weights[-2]
 
-        today = date.today()
-        xp += 50
-        total_workouts += 1
+        # If gaining too fast (over 0.75 lb/week), reduce calories
+        if change > 0.75:
+            st.session_state.calories -= 150
+            st.warning("⚠️ Gaining too fast. Calories reduced by 150.")
 
-        if last_workout:
-            last_date = datetime.strptime(last_workout, "%Y-%m-%d").date()
-            if (today - last_date).days <= 2:
-                streak += 1
-            else:
-                streak = 1
+        # If not gaining at all
+        elif change < 0.1:
+            st.session_state.calories += 150
+            st.warning("⚠️ Not gaining. Calories increased by 150.")
+
         else:
-            streak = 1
+            st.success("✅ Perfect rate of gain.")
 
-        last_workout = str(today)
+# --------------------------
+# BODY MEASUREMENTS
+# --------------------------
 
-        c.execute("UPDATE users SET xp=?, streak=?, total_workouts=?, last_workout=? WHERE name=?",
-                  (xp, streak, total_workouts, last_workout, user_name))
-        c.execute("INSERT INTO workouts VALUES (?, ?)", (user_name, today))
-        conn.commit()
+st.subheader("📏 Body Measurements")
 
-        st.success("🔥 Workout Logged! +50 XP")
-        if streak % 5 == 0:
-            st.balloons()
+waist = st.number_input("Waist (inches)", 20.0, 60.0, 34.0)
+chest = st.number_input("Chest (inches)", 30.0, 60.0, 40.0)
+arms = st.number_input("Arms (inches)", 10.0, 25.0, 14.0)
 
-    # -----------------------
-    # Progress Dashboard
-    # -----------------------
+if st.button("Log Measurements"):
+    st.session_state.waist.append(waist)
+    st.session_state.chest.append(chest)
+    st.session_state.arms.append(arms)
+    st.success("Measurements Saved ✅")
 
-    st.divider()
-    st.header("📊 Progress")
+# --------------------------
+# TRAINING FREQUENCY
+# --------------------------
 
-    level = xp // 500 + 1
+def calculate_days(experience, effort, age):
+    base = 4
+    if experience == "Intermediate":
+        base = 5
+    if experience == "Advanced":
+        base = 5
+    if effort >= 8:
+        base += 1
+    if age >= 40:
+        base -= 1
+    return max(4, min(base, 6))
 
-    st.write(f"🔥 Streak: {streak}")
-    st.write(f"🏆 Total Workouts: {total_workouts}")
-    st.write(f"⭐ XP: {xp}")
-    st.write(f"🎮 Level: {level}")
+days_per_week = calculate_days(experience, effort, age)
 
-    st.progress((xp % 500) / 500)
+st.subheader(f"🏋️ Recommended Training Days: {days_per_week}")
 
-    # -----------------------
-    # Weekly Goal
-    # -----------------------
+# --------------------------
+# SPLIT
+# --------------------------
 
-    st.divider()
-    st.header("🎯 Weekly Goal")
+split = [
+    "Upper Chest + Delts",
+    "Lower",
+    "Back Width + Arms",
+    "Shoulders + Arms",
+    "Optional Pump"
+][:days_per_week]
 
-    one_week_ago = date.today() - timedelta(days=7)
-    c.execute("SELECT COUNT(*) FROM workouts WHERE name=? AND workout_date>=?",
-              (user_name, str(one_week_ago)))
-    weekly_count = c.fetchone()[0]
+st.subheader("Weekly Split")
+for i, day in enumerate(split):
+    st.write(f"Day {i+1}: {day}")
 
-    st.write(f"Workouts this week: {weekly_count}/3")
+# --------------------------
+# WORKOUT GENERATOR
+# --------------------------
 
-    if weekly_count >= 3:
-        st.success("✅ Weekly Goal Complete! Reward yourself.")
-    else:
-        st.info("3 workouts per week unlocks your weekly reward.")
+exercise_pool = {
+    "Upper Chest + Delts": [
+        "Incline DB Press 4x6-8",
+        "Cable Fly 3x12",
+        "Lateral Raises 4x15",
+        "Overhead Tricep Extension 3x12"
+    ],
+    "Lower": [
+        "Squats 4x6",
+        "RDL 3x8",
+        "Leg Press 3x10",
+        "Calf Raises 4x12"
+    ],
+    "Back Width + Arms": [
+        "Pullups 4x8",
+        "Chest Supported Row 4x8",
+        "Cable Curl 3x12",
+        "Face Pull 3x15"
+    ],
+    "Shoulders + Arms": [
+        "DB Shoulder Press 4x8",
+        "Lateral Raises 4x15",
+        "Barbell Curl 3x10",
+        "Pushdowns 3x12"
+    ],
+    "Optional Pump": [
+        "Machine Chest 3x12",
+        "Lat Pulldown 3x12",
+        "Lateral Raises 4x20",
+        "Arm Superset 3 rounds"
+    ]
+}
 
-    # -----------------------
-    # Badges
-    # -----------------------
+st.header("🔥 Today's Workout")
 
-    st.divider()
-    st.header("🏅 Badges")
+today_index = (date.today().day) % len(split)
+today_name = split[today_index]
 
-    if streak >= 5:
-        st.write("🔥 5-Day Streak Badge")
-    if total_workouts >= 20:
-        st.write("💪 20 Workout Milestone")
-    if level >= 5:
-        st.write("🚀 Level 5 Achieved")
+if "current_workout" not in st.session_state:
+    st.session_state.current_workout = exercise_pool[today_name]
 
-    if streak < 5 and total_workouts < 20 and level < 5:
-        st.write("No badges yet — keep building momentum!")
+st.subheader(today_name)
 
-    # -----------------------
-    # Simple Workout Plan
-    # -----------------------
+for ex in st.session_state.current_workout:
+    st.write("- " + ex)
 
-    st.divider()
-    st.header("📅 Suggested Workout Plan")
+# --------------------------
+# EXERCISE SWAP BUTTON
+# --------------------------
 
-    days = st.slider("Days per week", 2, 5, 3)
+if st.button("🔄 Swap Exercises"):
+    st.session_state.current_workout = list(reversed(st.session_state.current_workout))
+    st.success("Exercises Swapped 🔥")
 
-    if days <= 3:
-        split = ["Full Body"] * days
-    elif days == 4:
-        split = ["Upper", "Lower", "Upper", "Lower"]
-    else:
-        split = ["Push", "Pull", "Legs", "Upper", "Lower"]
+# --------------------------
+# COMPLETE WORKOUT
+# --------------------------
 
-    for i, day in enumerate(split):
-        st.write(f"Day {i+1}: {day}")
+if st.button("✅ Complete Workout"):
+    st.session_state.xp += 100
+    st.session_state.streak += 1
+    st.balloons()
+    st.success("🔥 +100 XP — You’re Building Your Best Physique")
 
-    st.divider()
+# --------------------------
+# PROGRESS DASHBOARD
+# --------------------------
 
-    # -----------------------
-    # Motivation
-    # -----------------------
+st.divider()
+st.header("🎮 Transformation Stats")
 
-    st.header("💬 Motivation")
+level = st.session_state.xp // 500 + 1
 
-    if streak >= 5:
-        st.write("You're building identity-based consistency.")
-    elif streak >= 2:
-        st.write("Momentum is forming. Keep showing up.")
-    else:
-        st.write("Just one workout today. That's it.")
+st.write(f"🔥 Streak: {st.session_state.streak}")
+st.write(f"⭐ XP: {st.session_state.xp}")
+st.write(f"🎮 Level: {level}")
+
+st.progress((st.session_state.xp % 500) / 500)
+
+# --------------------------
+# COUNTDOWN
+# --------------------------
+
+end_date = st.session_state.start_date + timedelta(weeks=10)
+total_days = (end_date - st.session_state.start_date).days
+days_passed = (date.today() - st.session_state.start_date).days
+
+st.subheader("⏳ 10 Week Transformation Progress")
+st.progress(min(days_passed / total_days, 1))
+st.write(f"{days_passed} / {total_days} days complete")
+
+# --------------------------
+# MOTIVATION
+# --------------------------
+
+st.divider()
+st.header("💬 Motivation")
+
+if st.session_state.streak >= 5:
+    st.write("You’re not working out. You’re becoming that guy.")
+elif st.session_state.streak >= 3:
+    st.write("Momentum is forming. Don’t break the chain.")
+else:
+    st.write("One workout at a time. Identity builds daily.")
+
