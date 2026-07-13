@@ -1,103 +1,91 @@
 import streamlit as st
 
-st.set_page_config(page_title="Personal Fitness App", layout="centered")
+st.set_page_config(page_title="Personal Fitness Coach", layout="centered")
 
-st.title("🏋️ Personal Fitness Planner")
+st.title("🏋️ Personal Fitness Coach")
 
-st.header("Your Information")
-
-age = st.number_input("Age", min_value=10, max_value=100, value=30)
-sex = st.selectbox("Sex", ["Male", "Female"])
-weight = st.number_input("Weight (lbs)", min_value=50, max_value=500, value=180)
-height = st.number_input("Height (inches)", min_value=48, max_value=90, value=70)
-
-activity_level = st.selectbox(
-    "Activity Level",
-    [
-        "Sedentary",
-        "Lightly Active",
-        "Moderately Active",
-        "Very Active",
-        "Athlete"
-    ]
-)
+st.header("Tell Me About You")
 
 goal = st.selectbox(
-    "Goal",
-    [
-        "Lose Fat",
-        "Maintain",
-        "Build Muscle"
-    ]
+    "Primary Goal",
+    ["Lose Fat", "Build Muscle", "Improve General Fitness"]
 )
 
-def calculate_bmr(age, sex, weight, height):
-    weight_kg = weight * 0.453592
-    height_cm = height * 2.54
-    
-    if sex == "Male":
-        return 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
+experience = st.selectbox(
+    "Experience Level",
+    ["Beginner", "Intermediate", "Advanced"]
+)
+
+days = st.slider("How many days per week can you train?", 2, 6, 3)
+
+equipment = st.selectbox(
+    "Equipment Access",
+    ["Gym", "Dumbbells Only", "Bodyweight Only"]
+)
+
+def generate_plan(goal, experience, days, equipment):
+    plan = {}
+
+    if days <= 3:
+        split = ["Full Body"] * days
+    elif days == 4:
+        split = ["Upper Body", "Lower Body", "Upper Body", "Lower Body"]
     else:
-        return 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
+        split = ["Push", "Pull", "Legs", "Upper", "Lower"][:days]
 
-def activity_multiplier(level):
-    return {
-        "Sedentary": 1.2,
-        "Lightly Active": 1.375,
-        "Moderately Active": 1.55,
-        "Very Active": 1.725,
-        "Athlete": 1.9
-    }[level]
-
-if st.button("Calculate Plan"):
-
-    bmr = calculate_bmr(age, sex, weight, height)
-    tdee = bmr * activity_multiplier(activity_level)
-
-    if goal == "Lose Fat":
-        calories = tdee - 500
-    elif goal == "Build Muscle":
-        calories = tdee + 300
-    else:
-        calories = tdee
-
-    protein = weight * 0.8
-    fat = weight * 0.35
-    carbs = (calories - (protein * 4 + fat * 9)) / 4
-
-    st.subheader("📊 Your Results")
-    st.write(f"**BMR:** {round(bmr)} calories/day")
-    st.write(f"**TDEE:** {round(tdee)} calories/day")
-    st.write(f"**Target Calories:** {round(calories)} per day")
-
-    st.subheader("🍽 Macronutrients")
-    st.write(f"Protein: {round(protein)} g")
-    st.write(f"Fat: {round(fat)} g")
-    st.write(f"Carbs: {round(carbs)} g")
-
-st.divider()
-
-st.header("📈 Weekly Progress Check")
-
-weekly_change = st.number_input("Weekly Weight Change (lbs)", value=0.0)
-
-if st.button("Adjust Calories"):
-
-    if goal == "Lose Fat":
-        if weekly_change > -0.5:
-            st.warning("Fat loss too slow. Reduce calories by 200.")
-        elif weekly_change < -1.5:
-            st.warning("Losing too fast. Increase calories by 200.")
+    for i, day in enumerate(split):
+        if equipment == "Gym":
+            exercises = [
+                "Squats",
+                "Bench Press",
+                "Deadlifts",
+                "Pull-ups",
+                "Shoulder Press"
+            ]
+        elif equipment == "Dumbbells Only":
+            exercises = [
+                "Goblet Squats",
+                "Dumbbell Bench Press",
+                "Dumbbell Rows",
+                "Dumbbell Shoulder Press",
+                "Lunges"
+            ]
         else:
-            st.success("You're on track!")
+            exercises = [
+                "Push-ups",
+                "Bodyweight Squats",
+                "Plank",
+                "Lunges",
+                "Glute Bridges"
+            ]
 
-    elif goal == "Build Muscle":
-        if weekly_change < 0.25:
-            st.warning("Gaining too slow. Increase calories by 200.")
-        elif weekly_change > 1:
-            st.warning("Gaining too fast. Reduce calories by 200.")
+        if experience == "Beginner":
+            sets_reps = "3 sets of 8–12 reps"
+        elif experience == "Intermediate":
+            sets_reps = "4 sets of 6–10 reps"
         else:
-            st.success("You're on track!")
+            sets_reps = "4–5 sets of 4–8 reps"
 
-    else:
-        st.info("Maintenance goal selected.")
+        plan[f"Day {i+1} - {day}"] = {
+            "Exercises": exercises,
+            "Prescription": sets_reps
+        }
+
+    return plan
+
+if st.button("Generate My Workout Plan"):
+
+    workout_plan = generate_plan(goal, experience, days, equipment)
+
+    st.header("📅 Your Weekly Plan")
+
+    for day, details in workout_plan.items():
+        st.subheader(day)
+        st.write(f"**Prescription:** {details['Prescription']}")
+        for exercise in details["Exercises"]:
+            st.write(f"- {exercise}")
+
+    st.divider()
+
+    st.subheader("📈 Progression Rule")
+    st.write("When you hit the top of the rep range for all sets, increase weight next week.")
